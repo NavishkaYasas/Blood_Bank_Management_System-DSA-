@@ -1,12 +1,23 @@
 package bloodbank.system;
 
+import bloodbank.io.AdminFileManager;
+import bloodbank.model.Admin;
+
 import java.util.Scanner;
 
 public class BloodBankSystem {
 
+    private static final String DATA_DIR = "data/";
+    private static final String ADMIN_FILE = DATA_DIR + "admin.txt";
+
+    private final AdminFileManager adminFileManager = new AdminFileManager();
+    private Admin admin;
+
     private final Scanner sc = new Scanner(System.in);
 
     public void run() {
+        loadAllData();
+
         System.out.println("======================================================");
         System.out.println("   WELCOME TO THE BLOOD BANK MANAGEMENT SYSTEM");
         System.out.println("======================================================");
@@ -25,6 +36,10 @@ public class BloodBankSystem {
         System.out.println("All data saved. Goodbye!");
     }
 
+    private void loadAllData() {
+        admin = adminFileManager.loadAdmin(ADMIN_FILE);
+    }
+
     private void showMainMenu() {
         System.out.println("\n----------------- MAIN MENU -----------------");
         System.out.println("1. Donor Registration");
@@ -34,20 +49,26 @@ public class BloodBankSystem {
         System.out.println("-----------------------------------------------");
     }
 
-    // ---- placeholders: we'll build these out feature by feature ----
     private void donorRegistrationFlow() {
         System.out.println("[Donor Registration] Not implemented yet.");
     }
 
     private void adminLoginFlow() {
-        System.out.println("[Admin Login] Not implemented yet.");
+        System.out.println("\n------------- ADMIN LOGIN -------------");
+        String u = readLine("Username: ");
+        String p = readLine("Password: ");
+        if (!admin.login(u, p)) {
+            System.out.println("Invalid credentials.");
+            return;
+        }
+        System.out.println("Login successful. Welcome, " + admin.getUsername() + "!");
+        // adminMenu() will go here once we build it in a future step
     }
 
     private void bloodRequestFlow() {
         System.out.println("[Blood Request] Not implemented yet.");
     }
 
-    // ---- input helpers ----
     private String readLine(String prompt) {
         System.out.print(prompt);
         return sc.nextLine().trim();
