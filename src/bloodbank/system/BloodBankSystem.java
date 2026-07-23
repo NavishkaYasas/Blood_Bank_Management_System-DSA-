@@ -1,17 +1,28 @@
 package bloodbank.system;
 
 import bloodbank.io.AdminFileManager;
+import bloodbank.io.DonorFileManager;
 import bloodbank.model.Admin;
+import bloodbank.model.Donor;
+import bloodbank.search.LinearSearch;
+import bloodbank.structures.DonorLinkedList;
 
+import java.util.List;
 import java.util.Scanner;
 
 public class BloodBankSystem {
 
     private static final String DATA_DIR = "data/";
     private static final String ADMIN_FILE = DATA_DIR + "admin.txt";
+    private static final String DONORS_FILE = DATA_DIR + "donors.txt";
+
+    public static final String[] BLOOD_GROUPS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"};
 
     private final AdminFileManager adminFileManager = new AdminFileManager();
+    private final DonorFileManager donorFileManager = new DonorFileManager();
+    private final DonorLinkedList donorList = new DonorLinkedList();
     private Admin admin;
+    private int donorCounter = 1;
 
     private final Scanner sc = new Scanner(System.in);
 
@@ -38,6 +49,10 @@ public class BloodBankSystem {
 
     private void loadAllData() {
         admin = adminFileManager.loadAdmin(ADMIN_FILE);
+        for (Donor d : donorFileManager.loadFromFile(DONORS_FILE)) {
+            donorList.insert(d);
+        }
+        donorCounter = donorList.size() + 1;
     }
 
     private void showMainMenu() {
@@ -50,7 +65,49 @@ public class BloodBankSystem {
     }
 
     private void donorRegistrationFlow() {
-        System.out.println("[Donor Registration] Not implemented yet.");
+        System.out.println("\n------------- DONOR REGISTRATION -------------");
+        String id = "D" + String.format("%04d", donorCounter++);
+        String name = readLine("Full Name: ");
+        int age = readInt("Age: ", 16, 70);
+        String contact = readLine("Contact Number: ");
+        String address = readLine("Address: ");
+
+        String bloodGroup = chooseBloodGroup();
+
+        System.out.println("\n-- Health Questionnaire --");
+        StringBuilder answers = new StringBuilder();
+        answers.append("Weight>50kg:").append(readLine("Are you over 50kg? (yes/no): "));
+        answers.append(";ChronicIllness:").append(readLine("Any chronic illness? (yes/no): "));
+        answers.append(";RecentSurgery:").append(readLine("Recent surgery in last 6 months? (yes/no): "));
+        answers.append(";OnMedication:").append(readLine("Currently on medication? (yes/no): "));
+        String lastDonation = readLine("Last donation date (yyyy-MM-dd, or 'none'): ");
+        if (lastDonation.equalsIgnoreCase("none") || lastDonation.isBlank()) {
+            lastDonation = "1970-01-01";
+        }
+
+        System.out.println("\n[Upload Medical Certificate (PDF)]");
+        System.out.println("--> This button is a placeholder for a future feature and is not yet functional.");
+        boolean certUploaded = false;
+
+        // NOTE: duplicate-ID checking (Set ADT) will be wired in once we build
+        // the Hash Table / Set feature - not needed yet since IDs are auto-generated.
+
+        Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers.toString(), certUploaded);
+        donorList.insert(donor);
+        donorFileManager.saveToFile(DONORS_FILE, donorList.traverse());
+
+        System.out.println("\nRegistration successful! Your Donor ID is: " + id);
+        System.out.println("Eligibility status: " + (donor.isEligible()
+                ? "Eligible to donate" : "Not yet eligible (must wait 90 days from last donation)"));
+    }
+
+    private String chooseBloodGroup() {
+        System.out.println("Select Blood Group:");
+        for (int i = 0; i < BLOOD_GROUPS.length; i++) {
+            System.out.println((i + 1) + ". " + BLOOD_GROUPS[i]);
+        }
+        int bgChoice = readInt("Choice: ", 1, BLOOD_GROUPS.length);
+        return BLOOD_GROUPS[bgChoice - 1];
     }
 
     private void adminLoginFlow() {
@@ -90,9 +147,25 @@ public class BloodBankSystem {
         }
     }
 
-    // ---- placeholders: each becomes a real feature later ----
     private void manageDonorsMenu() {
-        System.out.println("[View/Manage Donors] Not implemented yet.");
+        System.out.println("\n-- View / Manage Donors --");
+        System.out.println("1. View all donors (Linked List traversal)");
+        System.out.println("2. Search donor by name (Linear Search)");
+        System.out.println("3. Back");
+        int choice = readInt("Choice: ", 1, 3);
+        switch (choice) {
+            case 1 -> {
+                List<Donor> donors = donorList.traverse();
+                if (donors.isEmpty()) System.out.println("No donors registered yet.");
+                donors.forEach(System.out::println);
+            }
+            case 2 -> {
+                String name = readLine("Enter Donor Name: ");
+                Donor d = LinearSearch.searchByName(donorList.traverse(), name);
+                System.out.println(d != null ? d : "Donor not found.");
+            }
+            case 3 -> { /* back to admin menu */ }
+        }
     }
 
     private void manageInventoryMenu() {
