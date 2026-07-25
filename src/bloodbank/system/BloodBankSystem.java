@@ -163,8 +163,9 @@ public class BloodBankSystem {
         System.out.println("1. View all donors (Linked List traversal)");
         System.out.println("2. Search donor by name (Linear Search)");
         System.out.println("3. Search donor by ID (Hash Table - O(1) average)");
-        System.out.println("4. Back");
-        int choice = readInt("Choice: ", 1, 4);
+        System.out.println("4. Delete donor by ID");
+        System.out.println("5. Back");
+        int choice = readInt("Choice: ", 1, 5);
         switch (choice) {
             case 1 -> {
                 List<Donor> donors = donorList.traverse();
@@ -181,7 +182,19 @@ public class BloodBankSystem {
                 Donor d = donorHash.get(id);
                 System.out.println(d != null ? d : "Donor not found.");
             }
-            case 4 -> { /* back to admin menu */ }
+            case 4 -> {
+                String id = readLine("Enter Donor ID to delete: ");
+                if (donorList.delete(id)) {
+                    donorHash.remove(id);
+                    donorFileManager.saveToFile(DONORS_FILE, donorList.traverse());
+                    // NOTE: transaction logging (Stack) will be wired in once we
+                    // build the Transaction History feature.
+                    System.out.println("Donor deleted.");
+                } else {
+                    System.out.println("Donor not found.");
+                }
+            }
+            case 5 -> { /* back to admin menu */ }
         }
     }
 
