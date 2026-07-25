@@ -5,7 +5,9 @@ import bloodbank.io.DonorFileManager;
 import bloodbank.model.Admin;
 import bloodbank.model.Donor;
 import bloodbank.search.LinearSearch;
+import bloodbank.structures.DonorHashTable;
 import bloodbank.structures.DonorLinkedList;
+import bloodbank.structures.DonorSet;
 
 import java.util.List;
 import java.util.Scanner;
@@ -21,6 +23,8 @@ public class BloodBankSystem {
     private final AdminFileManager adminFileManager = new AdminFileManager();
     private final DonorFileManager donorFileManager = new DonorFileManager();
     private final DonorLinkedList donorList = new DonorLinkedList();
+    private final DonorHashTable donorHash = new DonorHashTable();
+    private final DonorSet donorSet = new DonorSet();
     private Admin admin;
     private int donorCounter = 1;
 
@@ -51,6 +55,8 @@ public class BloodBankSystem {
         admin = adminFileManager.loadAdmin(ADMIN_FILE);
         for (Donor d : donorFileManager.loadFromFile(DONORS_FILE)) {
             donorList.insert(d);
+            donorHash.put(d);
+            donorSet.add(d.getId());
         }
         donorCounter = donorList.size() + 1;
     }
@@ -89,11 +95,16 @@ public class BloodBankSystem {
         System.out.println("--> This button is a placeholder for a future feature and is not yet functional.");
         boolean certUploaded = false;
 
-        // NOTE: duplicate-ID checking (Set ADT) will be wired in once we build
-        // the Hash Table / Set feature - not needed yet since IDs are auto-generated.
+        // Member 6's Set ADT: duplicate prevention (checked before inserting anywhere)
+        if (donorSet.contains(id)) {
+            System.out.println("Registration failed: duplicate donor ID.");
+            return;
+        }
 
         Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers.toString(), certUploaded);
+        donorSet.add(id);
         donorList.insert(donor);
+        donorHash.put(donor);
         donorFileManager.saveToFile(DONORS_FILE, donorList.traverse());
 
         System.out.println("\nRegistration successful! Your Donor ID is: " + id);
@@ -151,8 +162,9 @@ public class BloodBankSystem {
         System.out.println("\n-- View / Manage Donors --");
         System.out.println("1. View all donors (Linked List traversal)");
         System.out.println("2. Search donor by name (Linear Search)");
-        System.out.println("3. Back");
-        int choice = readInt("Choice: ", 1, 3);
+        System.out.println("3. Search donor by ID (Hash Table - O(1) average)");
+        System.out.println("4. Back");
+        int choice = readInt("Choice: ", 1, 4);
         switch (choice) {
             case 1 -> {
                 List<Donor> donors = donorList.traverse();
@@ -164,7 +176,12 @@ public class BloodBankSystem {
                 Donor d = LinearSearch.searchByName(donorList.traverse(), name);
                 System.out.println(d != null ? d : "Donor not found.");
             }
-            case 3 -> { /* back to admin menu */ }
+            case 3 -> {
+                String id = readLine("Enter Donor ID: ");
+                Donor d = donorHash.get(id);
+                System.out.println(d != null ? d : "Donor not found.");
+            }
+            case 4 -> { /* back to admin menu */ }
         }
     }
 
