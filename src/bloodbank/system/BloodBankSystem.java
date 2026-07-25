@@ -10,7 +10,7 @@ import bloodbank.structures.DonorLinkedList;
 import java.util.List;
 import java.util.Scanner;
 
-public class BloodBankSystem {
+public class  BloodBankSystem {
 
     private static final String DATA_DIR = "data/";
     private static final String ADMIN_FILE = DATA_DIR + "admin.txt";
