@@ -3,11 +3,15 @@ package bloodbank.system;
 import bloodbank.io.AdminFileManager;
 import bloodbank.io.DonorFileManager;
 import bloodbank.model.Admin;
+import bloodbank.model.BloodUnit;
 import bloodbank.model.Donor;
 import bloodbank.search.LinearSearch;
+import bloodbank.structures.BloodUnitBST;
 import bloodbank.structures.DonorLinkedList;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 public class  BloodBankSystem {
@@ -21,8 +25,10 @@ public class  BloodBankSystem {
     private final AdminFileManager adminFileManager = new AdminFileManager();
     private final DonorFileManager donorFileManager = new DonorFileManager();
     private final DonorLinkedList donorList = new DonorLinkedList();
+    private final BloodUnitBST bloodUnitBST = new BloodUnitBST();
     private Admin admin;
     private int donorCounter = 1;
+    private int unitCounter = 1000;
 
     private final Scanner sc = new Scanner(System.in);
 
@@ -169,7 +175,73 @@ public class  BloodBankSystem {
     }
 
     private void manageInventoryMenu() {
-        System.out.println("[Manage Blood Inventory] Not implemented yet.");
+        System.out.println("\n-- Manage Blood Inventory --");
+        System.out.println("1. Add new blood unit");
+        System.out.println("2. Search unit by ID (BST)");
+        System.out.println("3. Delete unit by ID");
+        System.out.println("4. View inventory (BST in-order = soonest expiry first)");
+        System.out.println("5. View inventory traversals (pre-order / post-order, + AVL height)");
+        System.out.println("6. View inventory count per blood group (Array)");
+        System.out.println("7. Back");
+        int choice = readInt("Choice: ", 1, 7);
+        switch (choice) {
+            case 1 -> addBloodUnit();
+            case 2 -> {
+                String id = readLine("Enter Unit ID: ");
+                BloodUnit u = bloodUnitBST.search(id);
+                System.out.println(u != null ? u : "Unit not found.");
+            }
+            case 3 -> {
+                String id = readLine("Enter Unit ID to delete: ");
+                BloodUnit u = bloodUnitBST.search(id);
+                if (u != null) {
+                    bloodUnitBST.delete(id);
+                    //avlModule.delete(id);
+                    //txQueueModule.logTransaction("DELETE_UNIT", "Deleted unit " + id);
+                    System.out.println("Unit deleted.");
+                } else {
+                    System.out.println("Unit not found.");
+                }
+            }
+            case 4 -> {
+                List<BloodUnit> units = bloodUnitBST.inorder();
+                if (units.isEmpty()) System.out.println("No inventory yet.");
+                units.forEach(System.out::println);
+            }
+            case 5 -> {
+                System.out.println("Pre-order (BST - Member 3):");
+                bloodUnitBST.preorder().forEach(System.out::println);
+                System.out.println("Post-order (BST - Member 3):");
+                bloodUnitBST.postorder().forEach(System.out::println);
+               // System.out.println("AVL tree height (Member 4): " + avlModule.getTreeHeight()
+                    //    + " (kept balanced automatically via rotations)");
+            }
+            case 6 -> {
+                Map<String, Integer> counts = new LinkedHashMap<>();
+                for (String bg : BLOOD_GROUPS) counts.put(bg, 0);
+                for (BloodUnit u : bloodUnitBST.inorder()) {
+                    if (u.getStatus().equals("Available")) {
+                        counts.put(u.getBloodGroup(), counts.getOrDefault(u.getBloodGroup(), 0) + 1);
+                    }
+                }
+                System.out.println("Available units per blood group:");
+                for (String bg : BLOOD_GROUPS) {
+                    System.out.println("  " + bg + " : " + counts.get(bg));
+                }
+            }
+        }
+    }
+    private void addBloodUnit() {
+        String unitId = "U" + (unitCounter++);
+        String bloodGroup = chooseBloodGroup();
+        String expiry = readLine("Expiry date (yyyy-MM-dd): ");
+        String donorId = readLine("Donor ID (or 'N/A'): ");
+
+        BloodUnit unit = new BloodUnit(unitId, bloodGroup, expiry, donorId, "Available");
+        bloodUnitBST.insert(unit);   // Member 3
+       // avlModule.insert(unit);   // Member 4
+       // txQueueModule.logTransaction("ADD_UNIT", "Added unit " + unitId + " (" + bloodGroup + ")");
+        System.out.println("Unit " + unitId + " added to inventory.");
     }
 
     private void processRequestsMenu() {
