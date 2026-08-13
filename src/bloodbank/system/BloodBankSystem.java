@@ -1,11 +1,13 @@
 package bloodbank.system;
 
 import bloodbank.io.AdminFileManager;
+import bloodbank.io.BloodUnitFileManager;
 import bloodbank.io.DonorFileManager;
 import bloodbank.model.Admin;
 import bloodbank.model.BloodUnit;
 import bloodbank.model.Donor;
 import bloodbank.search.LinearSearch;
+import bloodbank.structures.BloodUnitAVL;
 import bloodbank.structures.BloodUnitBST;
 import bloodbank.structures.DonorHashTable;
 import bloodbank.structures.DonorLinkedList;
@@ -16,20 +18,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
-public class  BloodBankSystem {
+public class BloodBankSystem {
 
     private static final String DATA_DIR = "data/";
     private static final String ADMIN_FILE = DATA_DIR + "admin.txt";
     private static final String DONORS_FILE = DATA_DIR + "donors.txt";
+    private static final String UNITS_FILE = DATA_DIR + "bloodUnits.txt";
 
     public static final String[] BLOOD_GROUPS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"};
 
     private final AdminFileManager adminFileManager = new AdminFileManager();
     private final DonorFileManager donorFileManager = new DonorFileManager();
+    private final BloodUnitFileManager unitFileManager = new BloodUnitFileManager();
     private final DonorLinkedList donorList = new DonorLinkedList();
-    private final BloodUnitBST bloodUnitBST = new BloodUnitBST();
     private final DonorHashTable donorHash = new DonorHashTable();
     private final DonorSet donorSet = new DonorSet();
+    private final BloodUnitBST inventoryBST = new BloodUnitBST();
+    private final BloodUnitAVL inventoryAVL = new BloodUnitAVL();
     private Admin admin;
     private int donorCounter = 1;
     private int unitCounter = 1000;
@@ -64,7 +69,12 @@ public class  BloodBankSystem {
             donorHash.put(d);
             donorSet.add(d.getId());
         }
+        for (BloodUnit u : unitFileManager.loadFromFile(UNITS_FILE)) {
+            inventoryBST.insert(u);
+            inventoryAVL.insert(u);
+        }
         donorCounter = donorList.size() + 1;
+        unitCounter = 1000 + inventoryBST.inorder().size();
     }
 
     private void showMainMenu() {
@@ -207,10 +217,10 @@ public class  BloodBankSystem {
     private void manageInventoryMenu() {
         System.out.println("\n-- Manage Blood Inventory --");
         System.out.println("1. Add new blood unit");
-        System.out.println("2. Search unit by ID (BST)");
+        System.out.println("2. Search unit by ID");
         System.out.println("3. Delete unit by ID");
         System.out.println("4. View inventory (BST in-order = soonest expiry first)");
-        System.out.println("5. View inventory traversals (pre-order / post-order, + AVL height)");
+        System.out.println("5. View inventory traversals (pre-order / post-order)");
         System.out.println("6. View inventory count per blood group (Array)");
         System.out.println("7. Back");
         int choice = readInt("Choice: ", 1, 7);
@@ -218,38 +228,40 @@ public class  BloodBankSystem {
             case 1 -> addBloodUnit();
             case 2 -> {
                 String id = readLine("Enter Unit ID: ");
-                BloodUnit u = bloodUnitBST.search(id);
+                BloodUnit u = inventoryBST.search(id);
                 System.out.println(u != null ? u : "Unit not found.");
             }
             case 3 -> {
                 String id = readLine("Enter Unit ID to delete: ");
-                BloodUnit u = bloodUnitBST.search(id);
+                BloodUnit u = inventoryBST.search(id);
                 if (u != null) {
-                    bloodUnitBST.delete(id);
-                    //avlModule.delete(id);
-                    //txQueueModule.logTransaction("DELETE_UNIT", "Deleted unit " + id);
+                    inventoryBST.delete(id);
+                    inventoryAVL.delete(id);
+                    unitFileManager.saveToFile(UNITS_FILE, inventoryBST.inorder());
+                    // NOTE: transaction logging will be wired in once we build
+                    // the Transaction History feature (Member 2).
                     System.out.println("Unit deleted.");
                 } else {
                     System.out.println("Unit not found.");
                 }
             }
             case 4 -> {
-                List<BloodUnit> units = bloodUnitBST.inorder();
+                List<BloodUnit> units = inventoryBST.inorder();
                 if (units.isEmpty()) System.out.println("No inventory yet.");
                 units.forEach(System.out::println);
             }
             case 5 -> {
-                System.out.println("Pre-order (BST - Member 3):");
-                bloodUnitBST.preorder().forEach(System.out::println);
-                System.out.println("Post-order (BST - Member 3):");
-                bloodUnitBST.postorder().forEach(System.out::println);
-               // System.out.println("AVL tree height (Member 4): " + avlModule.getTreeHeight()
-                    //    + " (kept balanced automatically via rotations)");
+                System.out.println("Pre-order (BST):");
+                inventoryBST.preorder().forEach(System.out::println);
+                System.out.println("Post-order (BST):");
+                inventoryBST.postorder().forEach(System.out::println);
+                System.out.println("AVL tree height: " + inventoryAVL.getTreeHeight()
+                        + " (kept balanced automatically via rotations)");
             }
             case 6 -> {
                 Map<String, Integer> counts = new LinkedHashMap<>();
                 for (String bg : BLOOD_GROUPS) counts.put(bg, 0);
-                for (BloodUnit u : bloodUnitBST.inorder()) {
+                for (BloodUnit u : inventoryBST.inorder()) {
                     if (u.getStatus().equals("Available")) {
                         counts.put(u.getBloodGroup(), counts.getOrDefault(u.getBloodGroup(), 0) + 1);
                     }
@@ -259,8 +271,10 @@ public class  BloodBankSystem {
                     System.out.println("  " + bg + " : " + counts.get(bg));
                 }
             }
+            case 7 -> { /* back to admin menu */ }
         }
     }
+
     private void addBloodUnit() {
         String unitId = "U" + (unitCounter++);
         String bloodGroup = chooseBloodGroup();
@@ -268,9 +282,11 @@ public class  BloodBankSystem {
         String donorId = readLine("Donor ID (or 'N/A'): ");
 
         BloodUnit unit = new BloodUnit(unitId, bloodGroup, expiry, donorId, "Available");
-        bloodUnitBST.insert(unit);   // Member 3
-       // avlModule.insert(unit);   // Member 4
-       // txQueueModule.logTransaction("ADD_UNIT", "Added unit " + unitId + " (" + bloodGroup + ")");
+        inventoryBST.insert(unit);
+        inventoryAVL.insert(unit);
+        unitFileManager.saveToFile(UNITS_FILE, inventoryBST.inorder());
+        // NOTE: transaction logging will be wired in once we build
+        // the Transaction History feature (Member 2).
         System.out.println("Unit " + unitId + " added to inventory.");
     }
 
