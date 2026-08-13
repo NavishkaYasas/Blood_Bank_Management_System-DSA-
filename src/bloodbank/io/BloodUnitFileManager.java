@@ -5,7 +5,9 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class BloodUnitFileManager {
+public class BloodUnitFileManager implements FileStorage<BloodUnit> {
+
+    @Override
     public List<BloodUnit> loadFromFile(String path){
         List<BloodUnit> units = new ArrayList<>();
         File file = new File(path);
@@ -23,7 +25,7 @@ public class BloodUnitFileManager {
                     units.add(BloodUnit.fromFileString(line));
                 }
                 catch (Exception e){
-                    System.out.println("Skipping malfromed blood unit line: " + line);
+                    System.out.println("Skipping malformed blood unit line: " + line);
                 }
 
             }
@@ -34,6 +36,7 @@ public class BloodUnitFileManager {
         return units;
     }
 
+    @Override
     public void saveToFile(String path, List<BloodUnit> data){
         File parentDir = new File(path).getParentFile();
         if (parentDir != null && !parentDir.exists()) parentDir.mkdirs();

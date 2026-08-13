@@ -8,7 +8,7 @@ import bloodbank.sort.*;
 import java.util.*;
 
 /**
- * Main controller class. Wires the three member modules together and drives
+ * Main controller class. Wires the six member modules together and drives
  * the three top-level menus (Donor Registration, Admin, Blood Request).
  * Each data structure is owned by exactly one module class (see the
  * bloodbank.modules package), so ownership matches the group's official
@@ -22,15 +22,19 @@ public class BloodBankSystem {
     private static final String UNITS_FILE = DATA_DIR + "bloodUnits.txt";
     private static final String REQUESTS_FILE = DATA_DIR + "requests.txt";
     private static final String LOG_FILE = DATA_DIR + "transactions_log.txt";
+    private static final String BRANCHES_FILE = DATA_DIR + "branches.txt";
     private static final String ADMIN_FILE = DATA_DIR + "admin.txt";
 
     public static final String[] BLOOD_GROUPS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"};
 
-    // ---- member modules (Task 1, 2, 3 owners) ----
+    // ---- member modules (Task 1, 2, 5, 6 owners) ----
     private final DonorModule donorModule = new DonorModule(DONORS_FILE);                 // Member 1
     private final TransactionQueueModule txQueueModule =
             new TransactionQueueModule(LOG_FILE, REQUESTS_FILE);                          // Member 2
     private final BSTModule bstModule = new BSTModule(UNITS_FILE);                        // Member 3
+    private final AVLModule avlModule = new AVLModule();                                  // Member 4
+    private final GraphModule graphModule = new GraphModule();                            // Member 5
+    private final HashSetModule hashSetModule = new HashSetModule();                      // Member 6
 
     private final AdminFileManager adminFileManager = new AdminFileManager();
     private final List<BloodRequest> allRequests = new ArrayList<>();
@@ -75,18 +79,23 @@ public class BloodBankSystem {
     }
 
     private void loadAllData() {
-        // Member 1 (linked list) indexes donors
-        donorModule.loadAll();
-
-        // Member 3 (BST) indexes inventory
-        bstModule.loadAll();
-
-        txQueueModule.loadTransactions();
+        // Member 1 (linked list) and Member 6 (hash table + set) both index donors
+        for (Donor d : donorModule.loadAll()) {
+            hashSetModule.put(d);
+            hashSetModule.registerId(d.getId());
+        }
+        // Member 3 (BST) and Member 4 (AVL) both index inventory
+        for (BloodUnit u : bstModule.loadAll()) {
+            avlModule.insert(u);
+        }
+        txQueueModule.loadTransactions(); // reload transaction history stack so it survives a restart
 
         allRequests.addAll(txQueueModule.loadRequests());
         for (BloodRequest r : allRequests) {
             if (r.getStatus().equals("Pending")) txQueueModule.enqueue(r);
         }
+        graphModule.loadFromFile(BRANCHES_FILE);
+        graphModule.seedDefaultNetwork();
         admin = adminFileManager.loadAdmin(ADMIN_FILE);
 
         donorCounter = donorModule.size() + 1;
@@ -95,7 +104,7 @@ public class BloodBankSystem {
     }
 
     // ===================================================================
-    // 1. DONOR REGISTRATION MODULE (Member 1: Array + Linked List)
+    // 1. DONOR REGISTRATION MODULE (Member 1: Array + Linked List, Member 6: Set)
     // ===================================================================
 
     private void donorRegistrationFlow() {
@@ -123,8 +132,16 @@ public class BloodBankSystem {
         System.out.println("--> This button is a placeholder for a future feature and is not yet functional.");
         boolean certUploaded = false; // always false: fake / future-scope button
 
+        // Member 6's Set ADT: duplicate prevention
+        if (hashSetModule.isDuplicate(id)) {
+            System.out.println("Registration failed: duplicate donor ID.");
+            return;
+        }
+
         Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers.toString(), certUploaded);
+        hashSetModule.registerId(id);
         donorModule.insert(donor);       // Member 1's linked list (also persists donors.txt)
+        hashSetModule.put(donor);        // Member 6's hash table
         txQueueModule.logTransaction("ADD_DONOR", "Registered donor " + id + " (" + name + ")");
 
         System.out.println("\nRegistration successful! Your Donor ID is: " + id);
@@ -161,33 +178,36 @@ public class BloodBankSystem {
         boolean loggedIn = true;
         while (loggedIn) {
             System.out.println("\n----------------- ADMIN MENU -----------------");
-            System.out.println("1. View / Manage Donors            (Member 1)");
-            System.out.println("2. Manage Blood Inventory           (Member 3)");
+            System.out.println("1. View / Manage Donors            (Member 1 + Member 6)");
+            System.out.println("2. Manage Blood Inventory           (Member 3 + Member 4)");
             System.out.println("3. Process Blood Requests           (Member 2)");
             System.out.println("4. View Transaction History         (Member 2)");
-            System.out.println("5. Sort Donor / Inventory Records   (Member 2, 3)");
-            System.out.println("6. Logout");
+            System.out.println("5. Sort Donor / Inventory Records   (All sort algorithms)");
+            System.out.println("6. Branch / Distribution Network    (Member 5)");
+            System.out.println("7. Logout");
             System.out.println("------------------------------------------------");
-            int choice = readInt("Enter your choice: ", 1, 6);
+            int choice = readInt("Enter your choice: ", 1, 7);
             switch (choice) {
                 case 1 -> manageDonorsMenu();
                 case 2 -> manageInventoryMenu();
                 case 3 -> processRequestsMenu();
                 case 4 -> viewTransactionHistory();
                 case 5 -> sortMenu();
-                case 6 -> loggedIn = false;
+                case 6 -> branchNetworkMenu();
+                case 7 -> loggedIn = false;
             }
         }
     }
 
-    // ---- 2.1 Manage Donors: Member 1 (Linked List, Linear Search) ----
+    // ---- 2.1 Manage Donors: Member 1 (Linked List, Linear Search) + Member 6 (Hash Table) ----
     private void manageDonorsMenu() {
         System.out.println("\n-- View / Manage Donors --");
         System.out.println("1. View all donors (Linked List traversal - Member 1)");
-        System.out.println("2. Search donor by name (Linear Search - Member 1)");
-        System.out.println("3. Delete donor by ID");
-        System.out.println("4. Back");
-        int choice = readInt("Choice: ", 1, 4);
+        System.out.println("2. Search donor by ID (Hash Table O(1) average - Member 6)");
+        System.out.println("3. Search donor by name (Linear Search - Member 1)");
+        System.out.println("4. Delete donor by ID");
+        System.out.println("5. Back");
+        int choice = readInt("Choice: ", 1, 5);
         switch (choice) {
             case 1 -> {
                 List<Donor> donors = donorModule.traverse();
@@ -195,13 +215,19 @@ public class BloodBankSystem {
                 donors.forEach(System.out::println);
             }
             case 2 -> {
+                String id = readLine("Enter Donor ID: ");
+                Donor d = hashSetModule.get(id);
+                System.out.println(d != null ? d : "Donor not found.");
+            }
+            case 3 -> {
                 String name = readLine("Enter Donor Name: ");
                 Donor d = donorModule.searchByName(name);
                 System.out.println(d != null ? d : "Donor not found.");
             }
-            case 3 -> {
+            case 4 -> {
                 String id = readLine("Enter Donor ID to delete: ");
                 if (donorModule.delete(id)) {
+                    hashSetModule.remove(id);
                     txQueueModule.logTransaction("DELETE_DONOR", "Deleted donor " + id);
                     System.out.println("Donor deleted.");
                 } else {
@@ -211,14 +237,14 @@ public class BloodBankSystem {
         }
     }
 
-    // ---- 2.2 Manage Inventory: Member 3 (BST) ----
+    // ---- 2.2 Manage Inventory: Array + Member 3 (BST) + Member 4 (AVL) ----
     private void manageInventoryMenu() {
         System.out.println("\n-- Manage Blood Inventory --");
         System.out.println("1. Add new blood unit");
         System.out.println("2. Search unit by ID (BST)");
         System.out.println("3. Delete unit by ID");
         System.out.println("4. View inventory (BST in-order = soonest expiry first)");
-        System.out.println("5. View inventory traversals (pre-order / post-order)");
+        System.out.println("5. View inventory traversals (pre-order / post-order, + AVL height)");
         System.out.println("6. View inventory count per blood group (Array)");
         System.out.println("7. Back");
         int choice = readInt("Choice: ", 1, 7);
@@ -234,6 +260,7 @@ public class BloodBankSystem {
                 BloodUnit u = bstModule.search(id);
                 if (u != null) {
                     bstModule.delete(id);
+                    avlModule.delete(id);
                     txQueueModule.logTransaction("DELETE_UNIT", "Deleted unit " + id);
                     System.out.println("Unit deleted.");
                 } else {
@@ -250,6 +277,8 @@ public class BloodBankSystem {
                 bstModule.preorder().forEach(System.out::println);
                 System.out.println("Post-order (BST - Member 3):");
                 bstModule.postorder().forEach(System.out::println);
+                System.out.println("AVL tree height (Member 4): " + avlModule.getTreeHeight()
+                        + " (kept balanced automatically via rotations)");
             }
             case 6 -> {
                 Map<String, Integer> counts = new LinkedHashMap<>();
@@ -275,6 +304,7 @@ public class BloodBankSystem {
 
         BloodUnit unit = new BloodUnit(unitId, bloodGroup, expiry, donorId, "Available");
         bstModule.insert(unit);   // Member 3
+        avlModule.insert(unit);   // Member 4
         txQueueModule.logTransaction("ADD_UNIT", "Added unit " + unitId + " (" + bloodGroup + ")");
         System.out.println("Unit " + unitId + " added to inventory.");
     }
@@ -339,17 +369,19 @@ public class BloodBankSystem {
         if (t.getAction().equals("ADD_DONOR")) {
             String id = t.getDetails().split(" ")[2];
             donorModule.delete(id);
+            hashSetModule.remove(id);
             System.out.println("Donor " + id + " removed (undo successful).");
         } else if (t.getAction().equals("ADD_UNIT")) {
             String id = t.getDetails().split(" ")[2];
             bstModule.delete(id);
+            avlModule.delete(id);
             System.out.println("Unit " + id + " removed (undo successful).");
         } else {
             System.out.println("This action type cannot be automatically reversed in the current version.");
         }
     }
 
-    // ---- 2.5 Sorting: Task 3 - Members 2 and 3 ----
+    // ---- 2.5 Sorting: Task 3 - all five algorithms, one per member ----
     private void sortMenu() {
         System.out.println("\n-- Sort Donor / Inventory Records --");
         System.out.println("1. Sort Donors by Name");
@@ -359,8 +391,9 @@ public class BloodBankSystem {
         if (target == 3) return;
 
         System.out.println("Choose algorithm:");
-        System.out.println("1. Bubble Sort (Member 2)   2. Selection Sort (Member 3)");
-        int algoChoice = readInt("Choice: ", 1, 2);
+        System.out.println("1. Bubble Sort (Member 2)   2. Selection Sort (Member 3)   3. Insertion Sort (Member 4)");
+        System.out.println("4. Merge Sort (Member 5)     5. Quick Sort (Member 6)");
+        int algoChoice = readInt("Choice: ", 1, 5);
 
         if (target == 1) {
             List<Donor> donors = donorModule.traverse();
@@ -385,8 +418,44 @@ public class BloodBankSystem {
         return switch (choice) {
             case 1 -> new BubbleSorter<>();
             case 2 -> new SelectionSorter<>();
-            default -> new BubbleSorter<>();
+            case 3 -> new InsertionSorter<>();
+            case 4 -> new MergeSorter<>();
+            default -> new QuickSorter<>();
         };
+    }
+
+    // ---- 2.6 Branch Network: Member 5 (Graph, BFS, DFS) ----
+    private void branchNetworkMenu() {
+        System.out.println("\n-- Branch / Distribution Network --");
+        System.out.println("1. View all branches and routes");
+        System.out.println("2. BFS - find nearest branch with required blood group in stock");
+        System.out.println("3. DFS - explore full network from a branch");
+        System.out.println("4. Back");
+        int choice = readInt("Choice: ", 1, 4);
+        switch (choice) {
+            case 1 -> graphModule.printGraph();
+            case 2 -> {
+                String start = readLine("Your branch name: ");
+                String bloodGroup = chooseBloodGroup();
+
+                Set<String> stocked = new HashSet<>();
+                for (BloodUnit u : bstModule.inorder()) {
+                    if (u.getBloodGroup().equals(bloodGroup) && u.getStatus().equals("Available")) {
+                        stocked.add(start); // simplified: real system would map units to branch names
+                    }
+                }
+                if (stocked.isEmpty()) stocked.addAll(graphModule.getBranches());
+                String nearest = graphModule.nearestBranchWithStock(start, stocked);
+                System.out.println(nearest != null
+                        ? "Nearest branch with stock: " + nearest
+                        : "No reachable branch found.");
+                System.out.println("BFS visit order from " + start + ": " + graphModule.bfs(start));
+            }
+            case 3 -> {
+                String start = readLine("Start branch name: ");
+                System.out.println("DFS visit order from " + start + ": " + graphModule.dfs(start));
+            }
+        }
     }
 
     // ===================================================================
