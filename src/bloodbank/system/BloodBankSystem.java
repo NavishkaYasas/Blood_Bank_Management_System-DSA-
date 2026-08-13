@@ -97,11 +97,10 @@ public class BloodBankSystem {
         String bloodGroup = chooseBloodGroup();
 
         System.out.println("\n-- Health Questionnaire --");
-        StringBuilder answers = new StringBuilder();
-        answers.append("Weight>50kg:").append(readLine("Are you over 50kg? (yes/no): "));
-        answers.append(";ChronicIllness:").append(readLine("Any chronic illness? (yes/no): "));
-        answers.append(";RecentSurgery:").append(readLine("Recent surgery in last 6 months? (yes/no): "));
-        answers.append(";OnMedication:").append(readLine("Currently on medication? (yes/no): "));
+        String answers = "Weight>50kg:" + readLine("Are you over 50kg? (yes/no): ") +
+                ";ChronicIllness:" + readLine("Any chronic illness? (yes/no): ") +
+                ";RecentSurgery:" + readLine("Recent surgery in last 6 months? (yes/no): ") +
+                ";OnMedication:" + readLine("Currently on medication? (yes/no): ");
         String lastDonation = readLine("Last donation date (yyyy-MM-dd, or 'none'): ");
         if (lastDonation.equalsIgnoreCase("none") || lastDonation.isBlank()) {
             lastDonation = "1970-01-01";
@@ -117,7 +116,7 @@ public class BloodBankSystem {
             return;
         }
 
-        Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers.toString(), certUploaded);
+        Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers, certUploaded);
         donorSet.add(id);
         donorList.insert(donor);
         donorHash.put(donor);
