@@ -22,13 +22,15 @@ public class SystemTest {
         testMember1();
         testMember2();
         testMember3();
+        testAdminAndSorting();
+        testUndoAndEligibility();
         testIntegrationAndReboot();
 
         System.out.println("\\n========================================");
         if (failures == 0) {
-            System.out.println("ALL TESTS PASSED SUCCESSFULLY! ✅");
+            System.out.println("ALL TESTS PASSED SUCCESSFULLY! ");
         } else {
-            System.out.println("TESTS FAILED: " + failures + " errors found. ❌");
+            System.out.println("TESTS FAILED: " + failures + " errors found. ");
         }
         System.out.println("========================================");
 
@@ -143,6 +145,89 @@ public class SystemTest {
         } catch (IOException e) {
             assertCondition(false, "Failed to read units file");
         }
+    }
+
+    private static void testAdminAndSorting() {
+        System.out.println("\\n--- Testing Admin & Sorting (Members 1, 2, 3) ---");
+
+        // 1. Test Admin Login
+        Admin admin = new Admin("admin", "password123");
+        assertCondition(admin.login("admin", "password123"), "Admin login should succeed with correct credentials");
+        assertCondition(!admin.login("admin", "wrongpass"), "Admin login should fail with wrong password");
+
+        // 2. Test Sorting Donors
+        DonorModule dm = new DonorModule(DONORS_FILE);
+        Donor d1 = new Donor("S001", "Zack", 30, "1", "A1", "A+", "2024-01-01", "Yes", true);
+        Donor d2 = new Donor("S002", "Alice", 30, "2", "A2", "A+", "2024-01-01", "Yes", true);
+        Donor d3 = new Donor("S003", "Charlie", 30, "3", "A3", "A+", "2024-01-01", "Yes", true);
+        dm.insert(d1);
+        dm.insert(d2);
+        dm.insert(d3);
+
+        List<Donor> donors = dm.traverse();
+
+        // Bubble Sort
+        bloodbank.sort.SortStrategy<Donor> bubble = new bloodbank.sort.BubbleSorter<>();
+        bubble.sort(donors, java.util.Comparator.comparing(Donor::getName, String.CASE_INSENSITIVE_ORDER));
+        assertCondition(donors.get(0).getName().equals("Alice"), "Bubble sort should put Alice first");
+
+        // Selection Sort
+        bloodbank.sort.SortStrategy<Donor> selection = new bloodbank.sort.SelectionSorter<>();
+        selection.sort(donors, java.util.Comparator.comparing(Donor::getName, String.CASE_INSENSITIVE_ORDER));
+        assertCondition(donors.get(0).getName().equals("Alice"), "Selection sort should put Alice first");
+
+        // 3. Test Inventory Sorting & BST Traversals
+        BSTModule bst = new BSTModule(UNITS_FILE);
+        BloodUnit u1 = new BloodUnit("U1", "A+", "2026-12-01", "D1", "Available");
+        BloodUnit u2 = new BloodUnit("U2", "A+", "2026-01-01", "D2", "Available");
+        BloodUnit u3 = new BloodUnit("U3", "A+", "2026-06-01", "D3", "Available");
+        bst.insert(u1);
+        bst.insert(u2);
+        bst.insert(u3);
+
+        List<BloodUnit> inventory = bst.inorder();
+        bloodbank.sort.SortStrategy<BloodUnit> unitSorter = new bloodbank.sort.BubbleSorter<>();
+        unitSorter.sort(inventory, java.util.Comparator.comparing(BloodUnit::getExpiryDate));
+        assertCondition(inventory.get(0).getExpiryDate().equals("2026-01-01"), "Inventory sort should put soonest expiry first");
+
+        // BST Traversals
+        List<BloodUnit> preorder = bst.preorder();
+        List<BloodUnit> postorder = bst.postorder();
+        assertCondition(!preorder.isEmpty() && !postorder.isEmpty(), "BST traversals should return units");
+    }
+
+    private static void testUndoAndEligibility() {
+        System.out.println("\\n--- Testing Undo & Eligibility (Members 1, 2) ---");
+
+        // 1. Test Donor Eligibility (90 days rule)
+        java.time.LocalDate now = java.time.LocalDate.now();
+        String eligibleDate = now.minusDays(91).toString();
+        String ineligibleDate = now.minusDays(45).toString();
+
+        Donor dEligible = new Donor("E001", "Eligible Donor", 30, "1", "A1", "A+", eligibleDate, "Yes", true);
+        Donor dIneligible = new Donor("E002", "Ineligible Donor", 30, "2", "A2", "A+", ineligibleDate, "Yes", true);
+
+        assertCondition(dEligible.isEligible(), "Donor who donated 91 days ago should be eligible");
+        assertCondition(!dIneligible.isEligible(), "Donor who donated 45 days ago should be ineligible");
+
+        // 2. Test Undo (simulating BloodBankSystem.undoTransaction)
+        DonorModule dm = new DonorModule(DONORS_FILE);
+        Donor dUndo = new Donor("UNDO1", "Undo Me", 30, "1", "A1", "A+", "2024-01-01", "Yes", true);
+        dm.insert(dUndo);
+        assertCondition(dm.searchById("UNDO1") != null, "Donor should exist before undo");
+
+        // Simulate undo: DELETE_DONOR
+        dm.delete("UNDO1");
+        assertCondition(dm.searchById("UNDO1") == null, "Donor should be removed after simulated undo");
+
+        BSTModule bst = new BSTModule(UNITS_FILE);
+        BloodUnit uUndo = new BloodUnit("UUNDO1", "A+", "2026-12-01", "D1", "Available");
+        bst.insert(uUndo);
+        assertCondition(bst.search("UUNDO1") != null, "Unit should exist before undo");
+
+        // Simulate undo: DELETE_UNIT
+        bst.delete("UUNDO1");
+        assertCondition(bst.search("UUNDO1") == null, "Unit should be removed after simulated undo");
     }
 
     private static void testIntegrationAndReboot() {

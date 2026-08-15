@@ -111,7 +111,17 @@ public class BloodBankSystem {
         System.out.println("\n------------- DONOR REGISTRATION -------------");
         String id = "D" + String.format("%04d", donorCounter++);
         String name = readLine("Full Name: ");
-        int age = readInt("Age: ", 16, 70);
+        int age = readInt("Age: ", 0, 120);
+
+        if (age < 18) {
+            System.out.println("\nEligibility status: NOT Eligible (Too young to donate blood)");
+            return;
+        }
+        if (age > 65) {
+            System.out.println("\nEligibility status: NOT Eligible (Age limit exceeded for donation in Sri Lanka)");
+            return;
+        }
+
         String contact = readLine("Contact Number: ");
         String address = readLine("Address: ");
 
@@ -139,14 +149,21 @@ public class BloodBankSystem {
         }
 
         Donor donor = new Donor(id, name, age, contact, address, bloodGroup, lastDonation, answers.toString(), certUploaded);
-        hashSetModule.registerId(id);
-        donorModule.insert(donor);       // Member 1's linked list (also persists donors.txt)
-        hashSetModule.put(donor);        // Member 6's hash table
-        txQueueModule.logTransaction("ADD_DONOR", "Registered donor " + id + " (" + name + ")");
 
-        System.out.println("\nRegistration successful! Your Donor ID is: " + id);
-        System.out.println("Eligibility status: " + (donor.isEligible()
-                ? "Eligible to donate" : "Not yet eligible (must wait 90 days from last donation)"));
+        // Only save the donor to donors.txt (and the rest of the system) if they are currently eligible
+        // to donate - checked against both the 90-day last-donation rule and the health questionnaire.
+        if (donor.isEligible()) {
+            hashSetModule.registerId(id);
+            donorModule.insert(donor);       // Member 1's linked list (also persists donors.txt)
+            hashSetModule.put(donor);        // Member 6's hash table
+            txQueueModule.logTransaction("ADD_DONOR", "Registered donor " + id + " (" + name + ")");
+
+            System.out.println("\nRegistration successful! Your Donor ID is: " + id);
+            System.out.println("Eligibility status: Eligible to donate");
+        } else {
+            System.out.println("\nEligibility status: Not Eligible to donate");
+            System.out.println("Your details have not been saved because you are not currently eligible to donate.");
+        }
     }
 
     private String chooseBloodGroup() {

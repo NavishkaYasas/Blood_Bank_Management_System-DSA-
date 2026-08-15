@@ -39,15 +39,37 @@ public class Donor extends Person implements Comparable<Donor> {
     public boolean isCertUploaded() { return certUploaded; }
     public void setCertUploaded(boolean certUploaded) { this.certUploaded = certUploaded; }
 
-    /** A donor is eligible if at least 90 days have passed since last donation. */
+    /**
+     * A donor is eligible only if BOTH conditions hold:
+     *  - at least 90 days have passed since their last donation date, AND
+     *  - none of their health-questionnaire answers disqualify them
+     *    (must be over 50kg, and must answer "no" to chronic illness,
+     *    recent surgery, and currently on medication).
+     * Records that don't use the "Key:answer;..." format (e.g. older test
+     * data) are unaffected by the questionnaire check and fall back to the
+     * 90-day rule alone.
+     */
     public boolean isEligible() {
+        boolean dateOk;
         try {
             LocalDate last = LocalDate.parse(lastDonationDate, DATE_FMT);
             long days = ChronoUnit.DAYS.between(last, LocalDate.now());
-            return days >= 90;
+            dateOk = days >= 90;
         } catch (Exception e) {
-            return true; // no valid previous donation on record => eligible
+            dateOk = true; // no valid previous donation on record => doesn't block eligibility
         }
+        return dateOk && passesHealthQuestionnaire();
+    }
+
+    /** Checks the four health-questionnaire flags recorded in healthAnswers, if present. */
+    public boolean passesHealthQuestionnaire() {
+        if (healthAnswers == null) return true;
+        String a = healthAnswers.toLowerCase();
+        if (a.contains("weight>50kg:no")) return false;
+        if (a.contains("chronicillness:yes")) return false;
+        if (a.contains("recentsurgery:yes")) return false;
+        if (a.contains("onmedication:yes")) return false;
+        return true;
     }
 
     /** Serialises this donor into one CSV line for donors.txt */
