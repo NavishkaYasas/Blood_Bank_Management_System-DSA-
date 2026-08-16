@@ -36,6 +36,12 @@ public class BloodRequest {
         this.fulfilledUnitId = unitId;
     }
 
+    /** Reverts a Fulfilled request back to Pending, clearing the issued-unit link. Used when undoing an ISSUE_UNIT transaction. */
+    public void resetToPending() {
+        this.status = "Pending";
+        this.fulfilledUnitId = "";
+    }
+
     public String toFileString() {
         return requestId + "," + requester.toFileString() + "," + status + "," + dateCreated
                 + "," + fulfilledUnitId;

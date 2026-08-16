@@ -141,10 +141,7 @@ public class BloodBankSystem {
         answers.append(";ChronicIllness:").append(readLine("Any chronic illness? (yes/no): "));
         answers.append(";RecentSurgery:").append(readLine("Recent surgery in last 6 months? (yes/no): "));
         answers.append(";OnMedication:").append(readLine("Currently on medication? (yes/no): "));
-        String lastDonation = readLine("Last donation date (yyyy-MM-dd, or 'none'): ");
-        if (lastDonation.equalsIgnoreCase("none") || lastDonation.isBlank()) {
-            lastDonation = "1970-01-01"; // treated as no prior donation -> eligible
-        }
+        String lastDonation = readLastDonationDate();
 
         System.out.println("\n[Upload Medical Certificate (PDF)]");
         System.out.println("--> This button is a placeholder for a future feature and is not yet functional.");
@@ -325,7 +322,7 @@ public class BloodBankSystem {
         String unitId = "U" + (unitCounter++);
         String bloodGroup = chooseBloodGroup();
         String expiry = readValidDate("Expiry date (yyyy-MM-dd): ");
-        String donorId = readLine("Donor ID (or 'N/A'): ");
+        String donorId = readDonorIdForUnit(bloodGroup);
 
         BloodUnit unit = new BloodUnit(unitId, bloodGroup, expiry, donorId, "Available");
         bstModule.insert(unit);   // Member 3
@@ -440,6 +437,34 @@ public class BloodBankSystem {
             bstModule.delete(id);
             avlModule.delete(id);
             System.out.println("Unit " + id + " removed (undo successful).");
+        } else if (t.getAction().equals("ISSUE_UNIT")) {
+            // Details look like "Issued unit U1234 for request R0002" or
+            // "Issued unit U1234 for previously waitlisted request R0002" -
+            // unit id is always token[2], request id is always the last token.
+            String[] parts = t.getDetails().split(" ");
+            String unitId = parts[2];
+            String requestId = parts[parts.length - 1];
+
+            BloodUnit unit = bstModule.search(unitId);
+            if (unit != null) {
+                unit.setStatus("Available");
+                bstModule.persist();
+            }
+
+            for (BloodRequest r : allRequests) {
+                if (r.getRequestId().equals(requestId)) {
+                    r.resetToPending();
+                    if (r.getRequester().getUrgency().equalsIgnoreCase("Urgent")) {
+                        txQueueModule.enqueueUrgent(r);
+                    } else {
+                        txQueueModule.enqueue(r);
+                    }
+                    break;
+                }
+            }
+            txQueueModule.saveRequests(allRequests);
+            System.out.println("Unit " + unitId + " returned to Available and request " + requestId
+                    + " returned to Pending (undo successful).");
         } else {
             System.out.println("This action type cannot be automatically reversed in the current version.");
         }
@@ -578,16 +603,81 @@ public class BloodBankSystem {
         }
     }
 
-    /** Re-prompts until the input is a real calendar date in yyyy-MM-dd format (e.g. rejects "2026.08.30"). */
+    /**
+     * Re-prompts until the input is a real calendar date in yyyy-MM-dd format
+     * (e.g. rejects "2026.08.30") that is today or in the future (rejects
+     * already-expired dates like "2020-10-10" from being added as new stock).
+     */
     private String readValidDate(String prompt) {
         while (true) {
             System.out.print(prompt);
             String input = sc.nextLine().trim();
             try {
-                LocalDate.parse(input, BloodUnit.DATE_FMT);
+                LocalDate parsed = LocalDate.parse(input, BloodUnit.DATE_FMT);
+                if (parsed.isBefore(LocalDate.now())) {
+                    System.out.println("Expiry date cannot be in the past. Please enter today's date or later.");
+                    continue;
+                }
                 return input;
             } catch (DateTimeParseException e) {
                 System.out.println("Invalid date. Please use yyyy-MM-dd format (e.g. 2026-09-30).");
+            }
+        }
+    }
+
+    /**
+     * Re-prompts until the input is either "N/A" or a Donor ID that is actually
+     * registered (Member 6's hash table lookup) and whose blood group matches
+     * the unit being added. Blank input is rejected - it must be an explicit
+     * "N/A" or a valid Donor ID.
+     */
+    private String readDonorIdForUnit(String bloodGroup) {
+        while (true) {
+            System.out.print("Donor ID (or 'N/A'): ");
+            String input = sc.nextLine().trim();
+            if (input.isEmpty()) {
+                System.out.println("Donor ID cannot be blank. Enter a registered Donor ID or 'N/A'.");
+                continue;
+            }
+            if (input.equalsIgnoreCase("N/A")) {
+                return "N/A";
+            }
+            Donor donor = hashSetModule.get(input); // Member 6's hash table - O(1) lookup
+            if (donor == null) {
+                System.out.println("Donor ID not found. Please enter a registered Donor ID or 'N/A'.");
+                continue;
+            }
+            if (!donor.getBloodGroup().equalsIgnoreCase(bloodGroup)) {
+                System.out.println("Donor " + input + " is blood group " + donor.getBloodGroup()
+                        + ", which does not match this unit's blood group (" + bloodGroup + ").");
+                continue;
+            }
+            return input;
+        }
+    }
+
+    /**
+     * Re-prompts until the input is either blank/"none" (no prior donation) or a
+     * real yyyy-MM-dd date that is not in the future (rejects malformed dates
+     * like "2025.01.01" from silently being treated as "no prior donation" by
+     * Donor.isEligible(), and rejects nonsensical future donation dates).
+     */
+    private String readLastDonationDate() {
+        while (true) {
+            System.out.print("Last donation date (yyyy-MM-dd, or 'none'): ");
+            String input = sc.nextLine().trim();
+            if (input.isEmpty() || input.equalsIgnoreCase("none")) {
+                return "1970-01-01"; // treated as no prior donation -> eligible
+            }
+            try {
+                LocalDate parsed = LocalDate.parse(input, Donor.DATE_FMT);
+                if (parsed.isAfter(LocalDate.now())) {
+                    System.out.println("Last donation date cannot be in the future.");
+                    continue;
+                }
+                return input;
+            } catch (DateTimeParseException e) {
+                System.out.println("Invalid date. Please use yyyy-MM-dd format (e.g. 2026-01-15) or 'none'.");
             }
         }
     }
