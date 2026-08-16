@@ -5,6 +5,8 @@ import bloodbank.model.*;
 import bloodbank.modules.*;
 import bloodbank.sort.*;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 /**
@@ -92,7 +94,13 @@ public class BloodBankSystem {
 
         allRequests.addAll(txQueueModule.loadRequests());
         for (BloodRequest r : allRequests) {
-            if (r.getStatus().equals("Pending")) txQueueModule.enqueue(r);
+            if (r.getStatus().equals("Pending")) {
+                if (r.getRequester().getUrgency().equalsIgnoreCase("Urgent")) {
+                    txQueueModule.enqueueUrgent(r);
+                } else {
+                    txQueueModule.enqueue(r);
+                }
+            }
         }
         graphModule.loadFromFile(BRANCHES_FILE);
         graphModule.seedDefaultNetwork();
@@ -316,7 +324,7 @@ public class BloodBankSystem {
     private void addBloodUnit() {
         String unitId = "U" + (unitCounter++);
         String bloodGroup = chooseBloodGroup();
-        String expiry = readLine("Expiry date (yyyy-MM-dd): ");
+        String expiry = readValidDate("Expiry date (yyyy-MM-dd): ");
         String donorId = readLine("Donor ID (or 'N/A'): ");
 
         BloodUnit unit = new BloodUnit(unitId, bloodGroup, expiry, donorId, "Available");
@@ -324,6 +332,45 @@ public class BloodBankSystem {
         avlModule.insert(unit);   // Member 4
         txQueueModule.logTransaction("ADD_UNIT", "Added unit " + unitId + " (" + bloodGroup + ")");
         System.out.println("Unit " + unitId + " added to inventory.");
+        retryWaitlistedRequests(bloodGroup);
+    }
+
+    /**
+     * Re-attempts previously Waitlisted requests for the given blood group now that new
+     * stock may be available. Urgent requests are retried before Normal ones; within the
+     * same urgency, earlier requests are retried first. Stops once no matching unit remains.
+     */
+    private void retryWaitlistedRequests(String bloodGroup) {
+        List<BloodRequest> waiting = new ArrayList<>();
+        for (BloodRequest r : allRequests) {
+            if (r.getStatus().equals("Waitlisted") && r.getRequester().getRequiredBloodGroup().equals(bloodGroup)) {
+                waiting.add(r);
+            }
+        }
+        if (waiting.isEmpty()) return;
+
+        waiting.sort((a, b) -> {
+            boolean aUrgent = a.getRequester().getUrgency().equalsIgnoreCase("Urgent");
+            boolean bUrgent = b.getRequester().getUrgency().equalsIgnoreCase("Urgent");
+            if (aUrgent != bUrgent) return aUrgent ? -1 : 1;
+            return a.getDateCreated().compareTo(b.getDateCreated());
+        });
+
+        boolean anyFulfilled = false;
+        for (BloodRequest r : waiting) {
+            BloodUnit match = findMatchingUnit(bloodGroup);
+            if (match == null) break;
+            match.setStatus("Issued");
+            r.fulfill(match.getUnitId());
+            txQueueModule.logTransaction("ISSUE_UNIT", "Issued unit " + match.getUnitId()
+                    + " for previously waitlisted request " + r.getRequestId());
+            System.out.println("Waitlisted request " + r.getRequestId() + " fulfilled with unit " + match.getUnitId());
+            anyFulfilled = true;
+        }
+        if (anyFulfilled) {
+            bstModule.persist();
+            txQueueModule.saveRequests(allRequests);
+        }
     }
 
     // ---- 2.3 Process Requests: Member 2 (Queue) + Member 3's BST search ----
@@ -491,7 +538,7 @@ public class BloodBankSystem {
 
         int qty = readInt("Quantity needed (units): ", 1, 20);
         String urgency = readLine("Urgency (Normal/Urgent): ");
-        if (!urgency.equalsIgnoreCase("Urgent")) urgency = "Normal";
+        urgency = urgency.equalsIgnoreCase("Urgent") ? "Urgent" : "Normal";
 
         Requester requester = new Requester(id, name, age, contact, address, hospital, bloodGroup, qty, urgency);
         BloodRequest request = new BloodRequest(id, requester, "Pending", BloodRequest.now());
@@ -527,6 +574,20 @@ public class BloodBankSystem {
                 System.out.println("Please enter a number between " + min + " and " + max + ".");
             } catch (NumberFormatException e) {
                 System.out.println("Invalid number, please try again.");
+            }
+        }
+    }
+
+    /** Re-prompts until the input is a real calendar date in yyyy-MM-dd format (e.g. rejects "2026.08.30"). */
+    private String readValidDate(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = sc.nextLine().trim();
+            try {
+                LocalDate.parse(input, BloodUnit.DATE_FMT);
+                return input;
+            } catch (DateTimeParseException e) {
+                System.out.println("Invalid date. Please use yyyy-MM-dd format (e.g. 2026-09-30).");
             }
         }
     }
