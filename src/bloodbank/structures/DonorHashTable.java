@@ -6,13 +6,13 @@ import java.util.List;
 
 /**
  * Member 6's component: Task 2 - Hash Table.
- * Collision resolution: separate chaining, where each bucket is itself a
- * small custom linked list (built with the shared generic Node<T>).
+ * - Collision resolution: separate chaining (each bucket is a linked list).
+ * - Uses a polynomial hash function on donor ID strings.
  */
 public class DonorHashTable {
-    private static final int CAPACITY = 101; // prime number to reduce clustering
-    private Node<Donor>[] buckets;
-    private int count;
+    private static final int CAPACITY = 101; // prime number reduces clustering
+    private Node<Donor>[] buckets;           // array of linked list heads
+    private int count;                       // number of donors stored
 
     @SuppressWarnings("unchecked")
     public DonorHashTable() {
@@ -20,7 +20,7 @@ public class DonorHashTable {
         count = 0;
     }
 
-    /** Simple polynomial hash function over the donor ID string. */
+    /** Polynomial hash function over donor ID string. */
     private int hash(String key) {
         int hashVal = 0;
         for (int i = 0; i < key.length(); i++) {
@@ -33,6 +33,7 @@ public class DonorHashTable {
     public void put(Donor donor) {
         int index = hash(donor.getId());
         Node<Donor> current = buckets[index];
+        // Check if donor already exists → update
         while (current != null) {
             if (current.data.getId().equals(donor.getId())) {
                 current.data = donor;
@@ -40,13 +41,14 @@ public class DonorHashTable {
             }
             current = current.next;
         }
+        // Insert new donor at head of chain
         Node<Donor> newNode = new Node<>(donor);
         newNode.next = buckets[index];
         buckets[index] = newNode;
         count++;
     }
 
-    /** O(1) average lookup by donor ID. */
+    /** Lookup donor by ID. O(1) average. */
     public Donor get(String id) {
         int index = hash(id);
         Node<Donor> current = buckets[index];
@@ -57,7 +59,7 @@ public class DonorHashTable {
         return null;
     }
 
-    /** Remove a donor by ID. O(1) average. */
+    /** Remove donor by ID. O(1) average. */
     public boolean remove(String id) {
         int index = hash(id);
         Node<Donor> current = buckets[index];
@@ -77,6 +79,7 @@ public class DonorHashTable {
 
     public int size() { return count; }
 
+    /** Return all donors in the table. */
     public List<Donor> allDonors() {
         List<Donor> result = new ArrayList<>();
         for (Node<Donor> bucket : buckets) {
