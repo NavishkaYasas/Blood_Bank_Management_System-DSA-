@@ -3,11 +3,17 @@ package bloodbank.sort;
 import java.util.Comparator;
 import java.util.List;
 
-/** Member 4's component. O(n) best case (already sorted), O(n^2) average/worst. */
+/**
+ * Best case : o(n)
+ * worst case : o(n^2)
+ * */
+//insertion sort implementation
+
 public class InsertionSorter<T> implements SortStrategy<T> {
 
     @Override
     public void sort(List<T> list, Comparator<T> comparator) {
+        // take the number of elements in the list
         int n = list.size();
         for (int i = 1; i < n; i++) {
             T key = list.get(i);
@@ -21,5 +27,6 @@ public class InsertionSorter<T> implements SortStrategy<T> {
     }
 
     @Override
+    // obtain the name of the sort algorithm
     public String getName() { return "Insertion Sort"; }
 }
