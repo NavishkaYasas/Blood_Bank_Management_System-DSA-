@@ -11,22 +11,26 @@ import java.time.temporal.ChronoUnit;
  */
 public class Donor extends Person implements Comparable<Donor> {
 
+    // Formatter for dates (yyyy-MM-dd format)
     public static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+    // Donor-specific fields
     private String bloodGroup;
     private String lastDonationDate;   // yyyy-MM-dd
-    private String healthAnswers;      // semicolon-separated answers
-    private boolean certUploaded;      // placeholder flag for future feature
+    private String healthAnswers;      // semicolon-separated answers (weight, illness, surgery, medication)
+    private boolean certUploaded;      // placeholder flag for future feature (medical certificate)
 
+    // Constructor: initialize donor with personal + donor-specific details
     public Donor(String id, String name, int age, String contactNo, String address,
                  String bloodGroup, String lastDonationDate, String healthAnswers, boolean certUploaded) {
-        super(id, name, age, contactNo, address);
+        super(id, name, age, contactNo, address); // call Person constructor
         this.bloodGroup = bloodGroup;
         this.lastDonationDate = lastDonationDate;
         this.healthAnswers = healthAnswers;
         this.certUploaded = certUploaded;
     }
 
+    // Getters and setters
     public String getBloodGroup() { return bloodGroup; }
     public void setBloodGroup(String bloodGroup) { this.bloodGroup = bloodGroup; }
 
@@ -40,14 +44,10 @@ public class Donor extends Person implements Comparable<Donor> {
     public void setCertUploaded(boolean certUploaded) { this.certUploaded = certUploaded; }
 
     /**
-     * A donor is eligible only if BOTH conditions hold:
-     *  - at least 90 days have passed since their last donation date, AND
-     *  - none of their health-questionnaire answers disqualify them
-     *    (must be over 50kg, and must answer "no" to chronic illness,
-     *    recent surgery, and currently on medication).
-     * Records that don't use the "Key:answer;..." format (e.g. older test
-     * data) are unaffected by the questionnaire check and fall back to the
-     * 90-day rule alone.
+     * Eligibility check:
+     * - At least 90 days since last donation, AND
+     * - Passes health questionnaire (weight > 50kg, no chronic illness, no recent surgery, not on medication).
+     * If lastDonationDate is invalid/missing, only questionnaire is checked.
      */
     public boolean isEligible() {
         boolean dateOk;
@@ -56,7 +56,7 @@ public class Donor extends Person implements Comparable<Donor> {
             long days = ChronoUnit.DAYS.between(last, LocalDate.now());
             dateOk = days >= 90;
         } catch (Exception e) {
-            dateOk = true; // no valid previous donation on record => doesn't block eligibility
+            dateOk = true; // no valid previous donation date => doesn't block eligibility
         }
         return dateOk && passesHealthQuestionnaire();
     }
@@ -87,11 +87,13 @@ public class Donor extends Person implements Comparable<Donor> {
                 Boolean.parseBoolean(p[8]));
     }
 
+    // Compare donors by name (case-insensitive) for sorting
     @Override
     public int compareTo(Donor other) {
         return this.getName().compareToIgnoreCase(other.getName());
     }
 
+    // String representation for logging/display
     @Override
     public String toString() {
         return super.toString() + " | Blood Group: " + bloodGroup

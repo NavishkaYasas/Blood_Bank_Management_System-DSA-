@@ -5,13 +5,12 @@ import java.util.*;
 /**
  * Member 5's component: Task 6 - Graphs.
  * Undirected, weighted graph of blood bank branches / partner hospitals.
- * Adjacency list representation built with java.util.Map/List for the outer
- * bookkeeping structure (the graph's own topology, not the domain records),
- * while BFS/DFS are implemented manually rather than relying on any library
- * graph algorithm.
+ * - Adjacency list representation using Map<String, List<Edge>>.
+ * - BFS and DFS implemented manually (no library graph algorithms).
  */
 public class BranchGraph {
 
+    // Inner class representing an edge (neighbor + distance)
     public static class Edge {
         public String neighbor;
         public int distanceKm;
@@ -21,8 +20,10 @@ public class BranchGraph {
         }
     }
 
+    // Adjacency list: branch name → list of edges
     private Map<String, List<Edge>> adjList = new LinkedHashMap<>();
 
+    // ---- Graph construction ----
     public void addBranch(String name) {
         adjList.putIfAbsent(name, new ArrayList<>());
     }
@@ -36,6 +37,7 @@ public class BranchGraph {
 
     public Set<String> getBranches() { return adjList.keySet(); }
 
+    // ---- Traversals ----
     /** Breadth-First Search from a starting branch. O(V + E). */
     public List<String> bfs(String start) {
         List<String> visitedOrder = new ArrayList<>();
@@ -78,10 +80,11 @@ public class BranchGraph {
         }
     }
 
+    // ---- Practical BFS use case ----
     /**
      * Finds the nearest branch (by hop count via BFS) that appears in stockedBranches.
-     * Returns null if none is reachable. Demonstrates a practical BFS use case:
-     * "which branch with the required blood type can I reach fastest?"
+     * Returns null if none is reachable.
+     * Example: "Which branch with required blood type can I reach fastest?"
      */
     public String nearestBranchWithStock(String start, Set<String> stockedBranches) {
         if (!adjList.containsKey(start)) return null;
@@ -103,6 +106,7 @@ public class BranchGraph {
         return null;
     }
 
+    // ---- Debugging / Demo ----
     public void printGraph() {
         for (String branch : adjList.keySet()) {
             StringBuilder sb = new StringBuilder(branch + " -> ");

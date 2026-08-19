@@ -9,8 +9,8 @@ import java.util.List;
  * Custom singly linked list (does not use java.util.LinkedList) storing Donor records.
  */
 public class DonorLinkedList {
-    private Node<Donor> head;
-    private int size;
+    private Node<Donor> head; // first node in the list
+    private int size;         // number of donors in the list
 
     public DonorLinkedList() {
         head = null;
@@ -21,10 +21,10 @@ public class DonorLinkedList {
     public void insert(Donor donor) {
         Node<Donor> newNode = new Node<>(donor);
         if (head == null) {
-            head = newNode;
+            head = newNode; // first donor
         } else {
             Node<Donor> current = head;
-            while (current.next != null) current = current.next;
+            while (current.next != null) current = current.next; // walk to tail
             current.next = newNode;
         }
         size++;
@@ -34,14 +34,14 @@ public class DonorLinkedList {
     public boolean delete(String id) {
         if (head == null) return false;
         if (head.data.getId().equals(id)) {
-            head = head.next;
+            head = head.next; // remove first node
             size--;
             return true;
         }
         Node<Donor> current = head;
         while (current.next != null) {
             if (current.next.data.getId().equals(id)) {
-                current.next = current.next.next;
+                current.next = current.next.next; // bypass node
                 size--;
                 return true;
             }
